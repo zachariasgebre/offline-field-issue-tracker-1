@@ -1,122 +1,134 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { db } from './db/db';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { syncPendingReports } from './services/syncEngine';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const isOnline = useOnlineStatus();
+  const [reports, setReports] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [form, setForm] = useState({
+    category: 'Water Infrastructure',
+    description: '',
+    location: '',
+    priority: 'MEDIUM',
+  });
+
+  const loadLocalReports = async () => {
+    const data = await db.reports.toArray();
+    setReports(data.reverse());
+  };
+
+  useEffect(() => {
+    loadLocalReports();
+  }, []);
+
+  useEffect(() => {
+    if (isOnline) {
+      handleManualSync();
+    }
+  }, [isOnline]);
+
+  const handleManualSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      await syncPendingReports();
+      await loadLocalReports();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const newReport = {
+      clientId: uuidv4(),
+      category: form.category,
+      description: form.description,
+      location: form.location,
+      priority: form.priority,
+      status: 'SUBMITTED',
+      syncStatus: 'PENDING',
+      reportedAt: new Date().toISOString(),
+    };
+
+    await db.reports.add(newReport);
+    setForm({ category: 'Water Infrastructure', description: '', location: '', priority: 'MEDIUM' });
+    await loadLocalReports();
+
+    if (isOnline) {
+      handleManualSync();
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Offline Field Issue Tracker</h2>
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
+          <span style={{
+            padding: '6px 12px',
+            borderRadius: '12px',
+            color: '#fff',
+            backgroundColor: isOnline ? '#2e7d32' : '#c62828',
+            fontWeight: 'bold'
+          }}>
+            {isOnline ? 'ONLINE' : 'OFFLINE'}
+          </span>
+          <button onClick={handleManualSync} disabled={!isOnline || syncing} style={{ marginLeft: '10px' }}>
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+      </header>
+
+      <section style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', margin: '20px 0' }}>
+        <h3>Create Issue Report</h3>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '10px' }}>
+            <label>Category: </label>
+            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+              <option>Water Infrastructure</option>
+              <option>Power Supply</option>
+              <option>Road Damage</option>
+              <option>Facility Maintenance</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <label>Location: </label>
+            <input required type="text" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <label>Description: </label>
+            <textarea required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <button type="submit">Save Report (Offline Safe)</button>
+        </form>
       </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
+      <section>
+        <h3>Submitted Reports</h3>
+        {reports.map((r) => (
+          <div key={r.clientId} style={{ border: '1px solid #ccc', padding: '10px', borderRadius: '4px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <strong>{r.category} - {r.location}</strong>
+              <span style={{
+                fontSize: '0.8em',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                backgroundColor: r.syncStatus === 'SYNCED' ? '#e8f5e9' : '#fff3e0'
+              }}>
+                {r.syncStatus}
+              </span>
+            </div>
+            <p>{r.description}</p>
+            <small>Status: <strong>{r.status}</strong> | Priority: {r.priority}</small>
+          </div>
+        ))}
       </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    </div>
+  );
 }
-
-export default App
