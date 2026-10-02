@@ -1,0 +1,52 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Status {
+  DRAFT
+  SUBMITTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+model Report {
+  id          String         @id @default(uuid())
+  clientId    String         @unique @map("client_id")
+  category    String
+  description String
+  location    String
+  priority    Priority       @default(MEDIUM)
+  status      Status         @default(SUBMITTED)
+  reportedAt  DateTime       @default(now()) @map("reported_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  history     AuditHistory[]
+
+  @@map("reports")
+}
+
+model AuditHistory {
+  id        String   @id @default(uuid())
+  reportId  String   @map("report_id")
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  action    String
+  actor     String   @default("SYSTEM")
+  details   String
+  timestamp DateTime @default(now())
+
+  @@map("audit_histories")
+}
